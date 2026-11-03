@@ -14,7 +14,9 @@
   ],
   "implemented_technologies": [
     "Elixir",
-    "Biblioteca padrão"
+    "GenServer ou biblioteca padrão",
+    "ExUnit"
   ],
-  "validation": "Consulte GitHub Actions"
+  "validation": "Consulte GitHub Actions",
+  "github_url": "https://github.com/juniordev830/quiz-sala"
 }
