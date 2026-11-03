@@ -11,4 +11,4 @@ jobs:
         with:
           persist-credentials: false
       - name: Testar
-        run: docker run --rm -v "$PWD:/work" -w /work elixir:1.18 main.exs --self-test
+        run: docker run --rm -v "$PWD:/work" -w /work elixir:1.18 elixir main.exs --self-test
