@@ -1,0 +1,14 @@
+name: Validar Elixir
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Testar
+        run: docker run --rm -v "$PWD:/work" -w /work elixir:1.18 main.exs --self-test

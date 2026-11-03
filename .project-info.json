@@ -1,0 +1,20 @@
+{
+  "name": "quiz-sala",
+  "title": "Quiz Sala",
+  "description": "Competição de perguntas por equipes em uma sala compartilhada.",
+  "primary_language": "Elixir",
+  "proposed_technologies": "Elixir, Phoenix Channels e GenServer",
+  "status": "initial-core",
+  "github_created": true,
+  "application_implemented": true,
+  "planned_features": [
+    "Criar sala e perguntas",
+    "Receber respostas das equipes",
+    "Atualizar placar em tempo real"
+  ],
+  "implemented_technologies": [
+    "Elixir",
+    "Biblioteca padrão"
+  ],
+  "validation": "Consulte GitHub Actions"
+}

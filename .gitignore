@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+build/
+.build/
+target/
+.dart_tool/
+vendor/
+node_modules/
+*.log
