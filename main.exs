@@ -14,15 +14,18 @@ defmodule QuizRoom do
   @impl true
   def handle_call(:scoreboard, _from, state), do: {:reply, state.scores, state}
   def handle_call({:answer, team, question, choice}, _from, state) do
-    key = {team, question}
+    # Canonicalize a team's visible name before checking repeated answers.
+    # Otherwise "Azul", " Azul " and blank whitespace can create separate teams.
+    normalized_team = if is_binary(team), do: String.trim(team), else: ""
+    key = {normalized_team, question}
     cond do
-      not is_binary(team) or byte_size(team) not in 1..80 or not is_integer(choice) or choice not in 1..4 -> {:reply, {:error, :invalid_answer}, state}
+      byte_size(normalized_team) not in 1..80 or not is_integer(choice) or choice not in 1..4 -> {:reply, {:error, :invalid_answer}, state}
       not Map.has_key?(state.answers, question) -> {:reply, {:error, :unknown_question}, state}
       MapSet.member?(state.seen, key) -> {:reply, {:error, :already_answered}, state}
-      not Map.has_key?(state.scores, team) and map_size(state.scores) >= 100 -> {:reply, {:error, :room_full}, state}
+      not Map.has_key?(state.scores, normalized_team) and map_size(state.scores) >= 100 -> {:reply, {:error, :room_full}, state}
       true ->
         points = if state.answers[question] == choice, do: 10, else: 0
-        next = %{state | seen: MapSet.put(state.seen, key), scores: Map.update(state.scores, team, points, &(&1 + points))}
+        next = %{state | seen: MapSet.put(state.seen, key), scores: Map.update(state.scores, normalized_team, points, &(&1 + points))}
         {:reply, {:ok, points}, next}
     end
   end
@@ -36,6 +39,15 @@ if System.argv() == ["--self-test"] do
       assert QuizRoom.answer(pid, "Azul", 1, 2) == {:ok, 10}
       assert QuizRoom.answer(pid, "Azul", 1, 2) == {:error, :already_answered}
       assert QuizRoom.scoreboard(pid) == %{"Azul" => 10}
+    end
+    test "whitespace cannot create a second identity or bypass one-answer limit" do
+      {:ok, pid} = QuizRoom.start_link(%{1 => 2, 2 => 1})
+      assert QuizRoom.answer(pid, "  Azul  ", 1, 2) == {:ok, 10}
+      assert QuizRoom.answer(pid, "Azul", 1, 2) == {:error, :already_answered}
+      assert QuizRoom.answer(pid, "   ", 2, 1) == {:error, :invalid_answer}
+      assert QuizRoom.answer(pid, nil, 2, 1) == {:error, :invalid_answer}
+      assert QuizRoom.answer(pid, "Azul", 2, 1) == {:ok, 10}
+      assert QuizRoom.scoreboard(pid) == %{"Azul" => 20}
     end
     test "invalid questions do not consume an answer" do
       {:ok, pid} = QuizRoom.start_link(%{1 => 2})
