@@ -10,5 +10,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Testar
+      - name: Testar sala original
         run: docker run --rm -v "$PWD:/work" -w /work elixir:1.18 elixir main.exs --self-test
+      - name: Testar torneio, relatórios e concorrência
+        run: docker run --rm -v "$PWD:/work" -w /work elixir:1.18 elixir tournament_test.exs
