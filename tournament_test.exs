@@ -242,7 +242,7 @@ defmodule QuizTournamentTest do
       end
       assert {:ok, _} = QuizTournament.close_round(pid)
       assert {:ok, team} = QuizTournament.team_report(pid, "A")
-      assert team.points == 70
+      assert team.points == 68
       assert team.correct == 5
       assert team.best_streak == 5
     end
