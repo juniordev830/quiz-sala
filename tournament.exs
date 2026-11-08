@@ -82,6 +82,7 @@ defmodule QuizTournament do
       not is_integer(correct) or correct not in 1..4 -> {:error, :invalid_correct_choice}
       not is_integer(points) or points not in 1..100 -> {:error, :invalid_points}
       not is_binary(category) -> {:error, :invalid_category}
+      not String.valid?(category) -> {:error, :invalid_category}
       String.trim(category) == "" -> {:error, :invalid_category}
       String.length(category) > @max_category_name -> {:error, :invalid_category}
       true ->
@@ -107,6 +108,8 @@ defmodule QuizTournament do
     if not String.valid?(name), do: {:error, :invalid_team}, else: normalize_valid_team(name)
   end
 
+  defp normalize_team(_), do: {:error, :invalid_team}
+
   defp normalize_valid_team(name) do
     normalized = String.trim(name)
 
@@ -117,8 +120,6 @@ defmodule QuizTournament do
       true -> {:ok, normalized}
     end
   end
-
-  defp normalize_team(_), do: {:error, :invalid_team}
 
   defp event(state, kind, data) do
     entry = %{sequence: length(state.events) + 1, kind: kind, data: data}
