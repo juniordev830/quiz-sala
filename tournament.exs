@@ -14,7 +14,10 @@ defmodule QuizTournament do
   @max_category_name 60
 
   def start_link(questions, opts \\ []) do
-    GenServer.start_link(__MODULE__, {questions, opts})
+    with {:ok, bank} <- normalize_bank(questions),
+         {:ok, max_teams} <- validate_max_teams(opts) do
+      GenServer.start_link(__MODULE__, {bank, max_teams})
+    end
   end
 
   def register(pid, name), do: GenServer.call(pid, {:register, name})
@@ -35,23 +38,18 @@ defmodule QuizTournament do
   def question_ids(pid), do: GenServer.call(pid, :question_ids)
 
   @impl true
-  def init({questions, opts}) do
-    with {:ok, bank} <- normalize_bank(questions),
-         {:ok, max_teams} <- validate_max_teams(opts) do
-      {:ok,
-       %{
-         bank: bank,
-         max_teams: max_teams,
-         teams: %{},
-         used_questions: MapSet.new(),
-         current: nil,
-         rounds: [],
-         events: [],
-         next_round: 1
-       }}
-    else
-      {:error, reason} -> {:stop, reason}
-    end
+  def init({bank, max_teams}) do
+    {:ok,
+     %{
+       bank: bank,
+       max_teams: max_teams,
+       teams: %{},
+       used_questions: MapSet.new(),
+       current: nil,
+       rounds: [],
+       events: [],
+       next_round: 1
+     }}
   end
 
   def normalize_bank(questions) when is_map(questions) do
@@ -70,7 +68,7 @@ defmodule QuizTournament do
 
   def normalize_bank(_), do: {:error, :invalid_bank}
 
-  def normalize_question(id, answer) when is_integer(answer) do
+  def normalize_question(id, answer) when not is_map(answer) do
     normalize_question(id, %{correct: answer, points: 10, category: "Geral"})
   end
 
@@ -106,6 +104,10 @@ defmodule QuizTournament do
   defp validate_max_teams(_), do: {:error, :invalid_options}
 
   defp normalize_team(name) when is_binary(name) do
+    if not String.valid?(name), do: {:error, :invalid_team}, else: normalize_valid_team(name)
+  end
+
+  defp normalize_valid_team(name) do
     normalized = String.trim(name)
 
     cond do
@@ -132,7 +134,7 @@ defmodule QuizTournament do
   def handle_call({:register, raw}, _from, state) do
     with {:ok, name} <- normalize_team(raw) do
       cond do
-        state.next_round != 1 -> {:reply, {:error, :registration_closed}, state}
+        (state.current != nil or state.next_round != 1) -> {:reply, {:error, :registration_closed}, state}
         Map.has_key?(state.teams, name) -> {:reply, {:error, :already_registered}, state}
         map_size(state.teams) >= state.max_teams -> {:reply, {:error, :team_limit}, state}
         true ->
@@ -147,7 +149,7 @@ defmodule QuizTournament do
   def handle_call({:unregister, raw}, _from, state) do
     with {:ok, name} <- normalize_team(raw) do
       cond do
-        state.next_round != 1 -> {:reply, {:error, :registration_closed}, state}
+        (state.current != nil or state.next_round != 1) -> {:reply, {:error, :registration_closed}, state}
         not Map.has_key?(state.teams, name) -> {:reply, {:error, :unknown_team}, state}
         true ->
           updated = %{state | teams: Map.delete(state.teams, name)}
@@ -160,7 +162,7 @@ defmodule QuizTournament do
 
   def handle_call({:add_question, id, question}, _from, state) do
     cond do
-      state.next_round != 1 -> {:reply, {:error, :bank_locked}, state}
+      (state.current != nil or state.next_round != 1) -> {:reply, {:error, :bank_locked}, state}
       Map.has_key?(state.bank, id) -> {:reply, {:error, :duplicate_question}, state}
       map_size(state.bank) >= @max_questions -> {:reply, {:error, :too_many_questions}, state}
       true ->
@@ -249,41 +251,6 @@ defmodule QuizTournament do
     end
   end
 
-  defp score_round(teams, bank, round) do
-    Enum.reduce(Enum.sort(Map.keys(teams)), {teams, []}, fn name, {acc, details} ->
-      original = Map.fetch!(acc, name)
-      {team, rows} = Enum.reduce(round.ids, {original, []}, fn id, {team, rows} ->
-        question = Map.fetch!(bank, id)
-
-        case Map.fetch(round.answers, {name, id}) do
-          :error ->
-            {team, [%{team: name, question: id, choice: nil, correct: false,
-              points: 0, category: question.category} | rows]}
-          {:ok, choice} ->
-            correct = choice == question.correct
-            streak = if correct, do: team.streak + 1, else: 0
-            bonus = if correct, do: min(streak - 1, 3) * 2, else: 0
-            earned = if correct, do: question.points + bonus, else: 0
-            category = Map.get(team.by_category, question.category,
-              %{answered: 0, correct: 0, points: 0})
-            category = %{answered: category.answered + 1,
-              correct: category.correct + if(correct, do: 1, else: 0),
-              points: category.points + earned}
-            team = %{team | points: team.points + earned,
-              correct: team.correct + if(correct, do: 1, else: 0),
-              wrong: team.wrong + if(correct, do: 0, else: 1),
-              answered: team.answered + 1, streak: streak,
-              best_streak: max(team.best_streak, streak),
-              by_category: Map.put(team.by_category, question.category, category)}
-            row = %{team: name, question: id, choice: choice,
-              correct: correct, points: earned, category: question.category}
-            {team, [row | rows]}
-        end
-      end)
-      team = %{team | rounds: team.rounds + 1}
-      {Map.put(acc, name, team), details ++ Enum.reverse(rows)}
-    end)
-  end
 
   def handle_call(:leaderboard, _from, state) do
     sorted = state.teams |> Map.values()
@@ -378,4 +345,41 @@ defmodule QuizTournament do
       safe
     end
   end
+  defp score_round(teams, bank, round) do
+    Enum.reduce(Enum.sort(Map.keys(teams)), {teams, []}, fn name, {acc, details} ->
+      original = Map.fetch!(acc, name)
+      {team, rows} = Enum.reduce(round.ids, {original, []}, fn id, {team, rows} ->
+        question = Map.fetch!(bank, id)
+
+        case Map.fetch(round.answers, {name, id}) do
+          :error ->
+            {team, [%{team: name, question: id, choice: nil, correct: false,
+              points: 0, category: question.category} | rows]}
+          {:ok, choice} ->
+            correct = choice == question.correct
+            streak = if correct, do: team.streak + 1, else: 0
+            bonus = if correct, do: min(streak - 1, 3) * 2, else: 0
+            earned = if correct, do: question.points + bonus, else: 0
+            category = Map.get(team.by_category, question.category,
+              %{answered: 0, correct: 0, points: 0})
+            category = %{answered: category.answered + 1,
+              correct: category.correct + if(correct, do: 1, else: 0),
+              points: category.points + earned}
+            team = %{team | points: team.points + earned,
+              correct: team.correct + if(correct, do: 1, else: 0),
+              wrong: team.wrong + if(correct, do: 0, else: 1),
+              answered: team.answered + 1, streak: streak,
+              best_streak: max(team.best_streak, streak),
+              by_category: Map.put(team.by_category, question.category, category)}
+            row = %{team: name, question: id, choice: choice,
+              correct: correct, points: earned, category: question.category}
+            {team, [row | rows]}
+        end
+      end)
+      team = %{team | rounds: team.rounds + 1}
+      {Map.put(acc, name, team), details ++ Enum.reverse(rows)}
+    end)
+  end
+
+
 end
