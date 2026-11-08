@@ -47,6 +47,8 @@ defmodule QuizTournamentTest do
         QuizTournament.normalize_bank(%{1 => %{correct: 1, category: " "}})
       assert {:error, :invalid_category} =
         QuizTournament.normalize_bank(%{1 => %{correct: 1, category: 12}})
+      assert {:error, :invalid_category} =
+        QuizTournament.normalize_bank(%{1 => %{correct: 1, category: <<255>>}})
     end
 
     test "normalizes defaults and trims categories" do
@@ -82,7 +84,7 @@ defmodule QuizTournamentTest do
 
     test "rejects blank, oversized and nonstring names" do
       pid = room()
-      for name <- ["", "  ", String.duplicate("a", 81), nil, 22] do
+      for name <- ["", "  ", String.duplicate("a", 81), nil, 22, <<255>>] do
         assert {:error, :invalid_team} = QuizTournament.register(pid, name)
       end
       assert QuizTournament.status(pid).teams == 0
