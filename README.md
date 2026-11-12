@@ -37,3 +37,7 @@ A proposta completa de evolução está em `ARQUITETURA.md`. As tecnologias prop
 - [ ] Atualizar placar em tempo real — ampliar o núcleo atual até o fluxo completo.
 
 Licença: ainda não definida.
+
+## Documentação de desenvolvimento
+
+O [guia de validação e evolução](docs/GUIA_DE_VALIDACAO.md) registra o estado atual, os testes e os próximos incrementos deste projeto.
