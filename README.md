@@ -41,3 +41,13 @@ Licença: ainda não definida.
 ## Documentação de desenvolvimento
 
 O [guia de validação e evolução](docs/GUIA_DE_VALIDACAO.md) registra o estado atual, os testes e os próximos incrementos deste projeto.
+
+## Incremento: ranking e status de sala (em revisão)
+
+A sala GenServer agora disponibiliza `QuizRoom.leaderboard(pid, limite)` com ordenação determinística (maior pontuação primeiro; desempate por nome) e `QuizRoom.status(pid)` com total de perguntas, equipes e respostas recebidas. Equipes com nome em branco são rejeitadas.
+
+```bash
+elixir main.exs --self-test
+```
+
+A implementação continua local, em memória e sem comunicação em rede.
