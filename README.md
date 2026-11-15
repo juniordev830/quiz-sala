@@ -42,7 +42,7 @@ Licença: ainda não definida.
 
 O [guia de validação e evolução](docs/GUIA_DE_VALIDACAO.md) registra o estado atual, os testes e os próximos incrementos deste projeto.
 
-## Incremento: ranking e status de sala (em revisão)
+## Incremento: ranking e status de sala
 
 A sala GenServer agora disponibiliza `QuizRoom.leaderboard(pid, limite)` com ordenação determinística (maior pontuação primeiro; desempate por nome) e `QuizRoom.status(pid)` com total de perguntas, equipes e respostas recebidas. Equipes com nome em branco são rejeitadas.
 
@@ -51,3 +51,51 @@ elixir main.exs --self-test
 ```
 
 A implementação continua local, em memória e sem comunicação em rede.
+
+## Torneios por rodadas (nova implementação)
+
+O módulo `tournament.exs` complementa o GenServer original sem alterar sua API.
+Ele permite cadastrar até 500 perguntas, configurar até 500 equipes, iniciar rodadas
+com perguntas não repetidas, receber respostas concorrentes, pausar/retomar a
+rodada, fechar e apurar os resultados. O placar só é atualizado ao fechar a rodada,
+evitando divulgar respostas corretas durante a competição.
+
+```sh
+elixir -r tournament.exs -e '
+{:ok, pid} = QuizTournament.start_link(%{
+  1 => %{correct: 2, points: 10, category: "História"},
+  2 => %{correct: 4, points: 20, category: "Ciências"}
+})
+{:ok, "Azul"} = QuizTournament.register(pid, "Azul")
+{:ok, "Verde"} = QuizTournament.register(pid, "Verde")
+{:ok, 1} = QuizTournament.start_round(pid, [1, 2])
+{:ok, :recorded} = QuizTournament.submit(pid, "Azul", 1, 2)
+{:ok, _} = QuizTournament.close_round(pid)
+IO.inspect(QuizTournament.leaderboard(pid))
+IO.puts(QuizTournament.export_csv(pid))
+'
+```
+
+As pontuações usam o valor da pergunta e bônus de sequência de até 6 pontos
+por resposta correta. Erros zeram a sequência; questões não respondidas não
+são contabilizadas como erros. O relatório por categoria e o histórico de rodadas
+permitem acompanhar o desempenho de cada equipe.
+
+### Testes e CI
+
+```sh
+elixir main.exs --self-test
+elixir tournament_test.exs
+```
+
+O workflow executa **ambas** as suítes em Elixir 1.18. A suíte adicional cobre
+validação, limites, concorrência, segurança da exportação CSV, pontuação,
+placar, histórico e isolamento entre salas. CSV neutraliza células que poderiam
+ser interpretadas como fórmulas por planilhas.
+
+### Limites atuais
+
+O estado permanece em memória: reiniciar o processo encerra a competição.
+Não há autenticação, cronômetro persistente, banco de dados ou comunicação
+via WebSocket. Esses itens exigem implementação própria e não são anunciados
+como recursos já entregues.
