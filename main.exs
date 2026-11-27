@@ -35,7 +35,7 @@ defmodule QuizRoom do
   def handle_call({:answer, team, question, choice}, _from, state) do
     key = {team, question}
     cond do
-      not is_binary(team) or byte_size(team) not in 1..80 or String.trim(team) == "" or not is_integer(choice) or choice not in 1..4 -> {:reply, {:error, :invalid_answer}, state}
+      not is_binary(team) or byte_size(team) not in 1..80 or not String.valid?(team) or String.trim(team) == "" or not is_integer(choice) or choice not in 1..4 -> {:reply, {:error, :invalid_answer}, state}
       not Map.has_key?(state.answers, question) -> {:reply, {:error, :unknown_question}, state}
       MapSet.member?(state.seen, key) -> {:reply, {:error, :already_answered}, state}
       not Map.has_key?(state.scores, team) and map_size(state.scores) >= 100 -> {:reply, {:error, :room_full}, state}
@@ -55,6 +55,11 @@ if System.argv() == ["--self-test"] do
       assert QuizRoom.answer(pid, "Azul", 1, 2) == {:ok, 10}
       assert QuizRoom.answer(pid, "Azul", 1, 2) == {:error, :already_answered}
       assert QuizRoom.scoreboard(pid) == %{"Azul" => 10}
+    end
+    test "invalid UTF-8 team names leave the scoreboard unchanged" do
+      {:ok, pid} = QuizRoom.start_link(%{1 => 2})
+      assert QuizRoom.answer(pid, <<255>>, 1, 2) == {:error, :invalid_answer}
+      assert QuizRoom.scoreboard(pid) == %{}
     end
     test "invalid questions do not consume an answer" do
       {:ok, pid} = QuizRoom.start_link(%{1 => 2})
